@@ -1,14 +1,17 @@
 <html>
   <head>
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-    <style>exec-result{background: gainsboro; padding: 10px; }</style>
+    <style>
+      exec-result, input{display: block; width: 200px; background: whitesmoke; }
+    </style>
   </head>
   <body>
+    <p><u>Note: Place this file on different host from a.html</u></p>
     <exec-result></exec-result>
     <div id="opt"><input name="tes"></div>
     <hr>
-    Reverse pattern (use pre-opened window (window.opener), for calculation)
-    <button onclick=window.open('a.html')>new window</button>
+    Reverse pattern: 1. press "new window" 2. press "run some stuff" button on the new window (to test a case where pre-opened window (window.opener) is used for calculation)
+    <button onclick=window.exec('a.html#+testing')>new window</button>
     <script>
       document.querySelector('input').addEventListener('change', function(){
           document.querySelector('exec-result').innerText = this.value - 0 + 3;
