@@ -65,10 +65,10 @@ Note: window.exec() is a wrapper function of window.open(). Thus it's necessary 
 
 ### Base effects and URL with hash fragment syntax
 #### Accepting form inputs: `#+<data>`
-The watch feature enables external scripts to enter some data into the input forms in the HTML with exec.js if the location.hash is given a data with `#+<data>`. Data part is recommended to be encoded with encodeURIComponent().
+The watch feature enables external scripts to enter some data into the input forms in the HTML if the location.hash is given with `#+<data>`. Data part is expected to be encoded with encodeURIComponent().
 
 #### Accepting form focus and/or getting inputs: `#<call-ID>+<data>`
-With the hash change in the format of <call-ID>+<data>, the script first looks up the HTMLElement with `#<call-ID>` which contains `<input>` with `[type=text]`, `[type=number]` or `<textarea>`. Nextly, it searches an element with `[name=<call-ID>]`. If any element that matches the stated condition, the first `input` or `textarea` element gets focused, and gets .value updated with `<data>` if provided.
+With the hash change in the format of <call-ID>+<data>, the script first looks up the HTMLElement with `#<call-ID>` (`id="<call-id>"`) which contains `<input>` with `[type=text]`, `[type=number]` or `<textarea>`. Nextly, if the previous condition did not match, it searches an element with `[name=<call-ID>]`. If any element that matches the stated condition is found, the first `input` or `textarea` element gets focused, and are updated with `<data>` if provided.
 
 ## Other notes
 
