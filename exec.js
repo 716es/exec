@@ -181,8 +181,7 @@ window.onexec = function(hash, result, external){
                                 log('onexec: changeparent');
                                 port = parentPort;
                             }else{
-                                console.warn('Window not found',
-                                             window.opened && opened, orighash);
+                                console.warn('exec: Window not found');
                                 return;
                             }
                             // t.location.hash = '#+' + encodeURIComponent(er.innerText);
@@ -226,7 +225,7 @@ window.onexec = function(hash, result, external){
     return false;
 }
 
-if(!window.userw){
+if(!window.noexechashhandler){
     window.addEventListener('hashchange', hashchange);
     
     if((location.hash && (location.hash.substr(0, 1) == '#')) || sessionStorage.hashstart){
@@ -280,7 +279,7 @@ if(window == top){
         window.addEventListener('load', execonload);
     }
 }else{
-    console.warn('non top window');
+    console.warn('exec: Non top window');
 }
 
 window.exec = exec;

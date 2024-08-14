@@ -7,15 +7,35 @@ To load other webpages on different domains only to call one function and to rec
 To maintain privacy, the hash fragment which can potentially contain sensitive information is coded to be removed from the browsing history. 
 
 ## Usage
+### Polyfilling
+The script extends `window` object with .exec() method and starts to watch `hashchange` event. There is no JS module at the moment, but you can use import() and 'side effects' import.
 
-Call `window.exec('<other page url with hash fragment>', '<duration in milliseconds>')` and receive the result either by: 1. returned Promise or 2. the text input form value on the page with focus (document.activeElement) which will be updated with the returned result.
+- HTML: `<script src="https://exec.as.cr/exec.js"></script>`  
+- JS import(): `import('https://exec.as.cr/exec.js')`
+- Importing from JSM: `<script type="module">import 'https://exec.as.cr/exec.js'</script>`
 
-### URL with hash fragment
+### Syntax
+```
+window.exec('<other page url with hash fragment>', '<duration in milliseconds>')
+```
+
+Call the above function and receive the result either by:
+1. returned Promise
+2. the text input form value on the page with focus (document.activeElement) which will be updated with the returned result.
+
+### Parameters
+#### URL with hash fragment
 URL with hash fragment
 
-### Duration in milliseconds
+#### Duration in milliseconds
 Specifying the duration always forces window.exec to use a child window initiated from the current page. By specifying duration in milliseconds, you can call window.exec multiple times by reusing the same window. 
 
+### Return value
+A Promise resolved with the calculation result. 
+
+### Examples
+
+#### As a javascript function
 1. Prepare a callee page (a page for limited features)
 
 Place a text or number input form on the page and wrap that input form with an element with ID (call-ID). Also prepare an element to show calculation result: either `<exec-result>` or an element with class name exec-result (`.exec-result`). Lastly, define an event (e.g `.addEventlistner('keydown', ..)`) with an event handler containing the actual features.
@@ -41,8 +61,14 @@ or place text input form with focus.
 <button onclick=exec('function-test.com#calc+1')>Take snap</button>
 <input autofocus />
 ```
-
 Note: window.exec() is a wrapper function of window.open(). Thus it's necessary to be called with a user-initiated event e.g onclick, onkeydown.
+
+### Base effects and URL with hash fragment syntax
+#### Accepting form inputs: `#+<data>`
+The watch feature enables external scripts to enter some data into the input forms in the HTML with exec.js if the location.hash is given a data with `#+<data>`. Data part is recommended to be encoded with encodeURIComponent().
+
+#### Accepting form focus and/or getting inputs: `#<call-ID>+<data>`
+With the hash change in the format of <call-ID>+<data>, the script first looks up the HTMLElement with `#<call-ID>` which contains `<input>` with `[type=text]`, `[type=number]` or `<textarea>`. Nextly, it searches an element with `[name=<call-ID>]`. If any element that matches the stated condition, the first `input` or `textarea` element gets focused, and gets .value updated with `<data>` if provided.
 
 ## Other notes
 
