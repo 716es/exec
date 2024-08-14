@@ -3,8 +3,9 @@
     <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   </head>
   <body>
-    Result: <input type="text" autofocus placeholder="result">
-    <button onclick=exec('b.html#opt+98');document.querySelector('input').focus();>Run some stuff</button>
+    Result: <input type="text" id=xx autofocus placeholder="result">
+    <button onclick="exec('b.html#opt+98', dur.value);xx.focus();setTimeout(function(){exec('b.html#opt+9', 10);}, 100)">Run some stuff</button>
+    <input size="4" id="dur" value="0" placeholder="microtime" />
     <script src="../exec.js"></script>
   </body>
 </html>

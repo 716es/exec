@@ -3,10 +3,15 @@ var hashcucond = window.hashcucond || '\\+.';
 var log = function(){
     if(localStorage.debug) console.log.apply(console, arguments);
 }
-
+var lasthash = null;
 if(!window.changeLocationHash){
     window.changeLocationHash = function(href){
         log('changeLocationHash to', href);
+        if(href.match('(#.+)$')){
+            lasthash = RegExp.$1;
+        }else{
+            lasthash = null;
+        }
         location.href = href;
     }
 }
@@ -16,7 +21,7 @@ function urlcleanup(isEvent){
        !sessionStorage.hashstart){
         if(isEvent){
             var pn = location.pathname +
-                location.search + location.hash.replace(/(\+).*$/g, '$1');
+                location.search + location.hash.replace(/^#\+.+/g, '').replace(/(\+).*$/g, '$1');
             if(pn.substr(-1) == '#') pn = pn.replace(/.$/, '');
             history.replaceState({id: pn}, '', pn);
         }else{
@@ -38,9 +43,9 @@ function sameurl(a, b){
     return false;
 }
 
-function exec(href, foundopener){
-    var hash = href.match('(#.+)$') && RegExp.$1, o = null, stat = null;
-    foundopener = !foundopener && parentPort &&
+function exec(href, duration){
+    var hash = href.match('(#.+)$') && RegExp.$1, o = null, stat = null, cw = null;
+    var foundopener = !(duration - 0) && parentPort &&
         sameurl(parentPort.href, href) ? opener : null;
     log('exec:href', href, 'and set opened[hash]', hash, foundopener);
     stat = {
@@ -54,17 +59,27 @@ function exec(href, foundopener){
         parentPort.postMessage(stat);
         parentPort.postMessage(href);
     }else{
-        stat.childWindow = open(href.replace(/(#.+)$/g, ''));
+        if(window.opened){
+            for(var i in window.opened){
+                var o = window.opened[i];
+                if(o.closeTimer && sameurl(o.href, href)){
+                    cw = o.childWindow;
+                    stat.port = o.port;
+                    break;
+                }
+            }
+        }
+        stat.childWindow = cw || open(href.replace(/(#.+)$/g, ''), 'exec-dest');
         if(!window.opened) window.opened = {};
         o = window.opened;
         o[hash] = stat;
-        window.addEventListener('message', function portInit(e){
+        !cw ? window.addEventListener('message', function portInit(e){
             if(e.ports && e.ports[0]){
                 o[hash].port = e.ports[0];
                 o[hash].port.onmessage = function(e2){
                     log('exec, onmessage from childWindow', e2.data);
                     if(typeof(e2.data) == 'string') {
-                        changeLocationHash(e2.data)
+                        changeLocationHash(e2.data);
                     }else if(e2.data.href){
                         o[e2.data.hash] = e2.data;
                         o[e2.data.hash].childWindow = stat.childWindow;
@@ -81,13 +96,12 @@ function exec(href, foundopener){
                 o[hash].port.postMessage(hash);
                 window.removeEventListener('message', portInit);
             }
-        });
+        }) : o[hash].port.postMessage(hash);
     }
     return new Promise(function(r, j){
         window.addEventListener('execcomplete', function execohc(evt){
             if(evt.hash == hash){
                 var result = decodeURIComponent(evt.result.substr(2));
-                log('execcomplete:', result);
                 r(result);
                 if(foundopener){ // reverse pat
                     log('execcomplete2');
@@ -95,7 +109,10 @@ function exec(href, foundopener){
                 }else{ // regular pat
                     log('execcomplete1');
                     o[hash].status = 1;
-                    o[hash].childWindow.close();
+                    o[hash].closeTimer = setTimeout(function(){
+                        o[hash].closeTimer = null;
+                        o[hash].childWindow.close();
+                    }, duration || 0);
                 }
                 window.removeEventListener('execcomplete', execohc);
             }
@@ -104,15 +121,28 @@ function exec(href, foundopener){
 }
 
 function hashchange(event, hash){
-    log('exec:hashchange:', hash);
-    if(event) {
+    log('exec:hashchange:', hash, lasthash);
+    var external = null, tx = null;
+    if(lasthash && event){
+        external = ((hash || location.hash) == lasthash);
+        lasthash = null;
+    }
+    if(event){
         hash = location.hash; // hash was Event
     }
     if(!sessionStorage.hashstart) setTimeout(urlcleanup.bind(window, event));
-    window.onexec(hash);
+    
+    var er = document.querySelector('exec-result:not(:empty), .exec-result:not(:empty)');
+    if(er){
+        er.classList.add('copying');
+        tx = er.innerText;
+        er.classList.remove('copying');
+    }
     var e = new CustomEvent('exec');
     e.data = hash;
+    e.result = tx;
     window.dispatchEvent(e);
+    window.onexec(hash, tx, external);
 }
 
 var selectByQuery = function(calc){
@@ -122,7 +152,7 @@ var selectByQuery = function(calc){
     );
 }
 
-window.onexec = function(hash){
+window.onexec = function(hash, result, external){
     var el = null, calc = null, v = null, t = null, er = null, mt = null;
     var orighash = hash;
     hash = decodeURIComponent(hash);
@@ -142,8 +172,7 @@ window.onexec = function(hash){
                     for(var mutation of mlist){
                         if(mutation.type == 'childList' && mutation.addedNodes.length){
                             var port = null;
-                            log('onexec: childList update', opener, parentPort, orighash,
-                                        mutation);
+                            log('onexec: childList update', opener, parentPort, orighash);
                             if(window.opened && opened[orighash]){ // reverse pat
                                 log('onexec: reverse', opened[orighash], orighash);
                                 port = window.opened[orighash].port;
@@ -160,10 +189,10 @@ window.onexec = function(hash){
                             er.classList.add('copying');
                             var tx = er.innerText;
                             er.classList.remove('copying');
-                            var result = '#+' + encodeURIComponent(tx);
-                            log('onexec: result text to postMessage', result, ';', tx);
-                            port.postMessage(result);
-                            port.postMessage({hash: orighash, result: result, type: 'complete'});
+                            var resulth = '#+' + encodeURIComponent(tx);
+                            log('onexec: result text to postMessage', resulth, ';', tx);
+                            port.postMessage(resulth);
+                            port.postMessage({hash: orighash, result: resulth, type: 'complete'});
                             observer.disconnect();
                         }
                     }
@@ -173,16 +202,21 @@ window.onexec = function(hash){
                 });
             }
         }
-        if(el || (document.activeElement && document.activeElement.matches(
-            ':where(textarea,input)'))){
+        if(el || (document.activeElement && document.activeElement/*.matches(
+            ':where(textarea,input)')*/)){
             var ael = (el || document.activeElement);
-            log('onexec: set value', el, document.activeElement, v, (new Error()).stack);
+            log('onexec: set value', el, document.activeElement, v, external, (new Error()).stack);
             ael.value = v;
             var nev = new CustomEvent('keydown', {bubbles: true});
             Object.defineProperty(nev, 'target', {writable: false, value: ael});
-            Object.defineProperty(nev, 'keyCode', {writable: false, value: 13});
-            Object.defineProperty(nev, 'ctrlKey', {writable: false, value: true});
-            Object.defineProperty(nev, 'shiftKey', {writable: false, value: true});
+            if(result){
+                Object.defineProperty(nev, 'result', {writable: false, value: result});
+            }
+            if(external){
+                Object.defineProperty(nev, 'keyCode', {writable: false, value: 13});
+                Object.defineProperty(nev, 'ctrlKey', {writable: false, value: true});
+                Object.defineProperty(nev, 'shiftKey', {writable: false, value: true});
+            }
             ael.dispatchEvent(nev);
             ael.dispatchEvent(new CustomEvent('change', {bubbles: true}));
             ael.dispatchEvent(new CustomEvent('input', {bubbles: true}));
@@ -226,7 +260,6 @@ function execonload(ev){
                 log('exec: load: loaded, sent port2 and succeeded');
                 parentPort = pp;
                 parentPort.href = e.data;
-                window.parentPort = pp;
             }else if(typeof(e.data) == 'string'){
                 log('exec: load: changing href', e.data);
                 changeLocationHash(e.data);
