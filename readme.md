@@ -4,13 +4,13 @@ A bare minimum function for inter-page communications using hash fragments.
 
 To load other webpages on different domains only to call one function and to receive the result, it defines hash fragment with specific format of : `#<call-ID>+<call-ARGUMENT>`.
 
-To maintain privacy, the hash fragment which can potentially contain sensitive information is coded to be removed from the browsing history. 
+To maintain privacy, the hash fragment which can potentially contain sensitive information will be removed from the browsing history.
 
 ## Usage
 ### Polyfilling
 The script extends `window` object with .exec() method and starts to watch `hashchange` event. There is no JS module at the moment, but you can use import() and 'side effects' import.
 
-- HTML: `<script src="https://exec.as.cr/exec.js"></script>`  
+- HTML: `<script src="https://exec.as.cr/exec.js"></script>`
 - JS import(): `import('https://exec.as.cr/exec.js')`
 - Importing from JSM: `<script type="module">import 'https://exec.as.cr/exec.js'</script>`
 
@@ -68,7 +68,7 @@ Note: window.exec() is a wrapper function of window.open(). Thus it's necessary 
 The watch feature enables external scripts to enter some data into the input forms in the HTML if the location.hash is given with `#+<data>`. Data part is expected to be encoded with encodeURIComponent().
 
 #### Accepting form focus and/or getting inputs: `#<call-ID>+<data>`
-With the hash change in the format of <call-ID>+<data>, the script first looks up the HTMLElement with `#<call-ID>` (`id="<call-id>"`) which contains `<input>` with `[type=text]`, `[type=number]` or `<textarea>`. Nextly, if the previous condition did not match, it searches an element with `[name=<call-ID>]`. If any element that matches the stated condition is found, the first `input` or `textarea` element gets focused, and are updated with `<data>` if provided.
+With the hash change in the format of <call-ID>+<data>, the script first searches the HTMLElement with `#<call-ID>` (`id="<call-id>"`) which contains `<input>` with `[type=text]`, `[type=number]` or `<textarea>`. Nextly, if the previous condition did not match, it searches an element with `[name=<call-ID>]`. Finally, if any matches, the first element in the match list gets focused and updated with the new value `<data>`, if provided.
 
 ## Other notes
 
