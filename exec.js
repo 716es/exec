@@ -1,12 +1,17 @@
 
-var hashcucond = window.hashcucond || '\\+.';
+var lasthash = null;
+var hashcucond = window.exechashcucond || '\\+.';
+var cleanupmode = window.execcleanupmode || 'except-id';
+// use .onformfocus instead of .onload
+var usefocus = typeof(document.hasFormFocus) != 'undefined';
 var log = function(){
     if(localStorage.debug) console.log.apply(console, arguments);
 }
-var lasthash = null;
-if(!window.changeLocationHash){
-    window.changeLocationHash = function(href){
-        log('changeLocationHash to', href);
+
+if(!window.execLocationHash){
+    window.execLocationHash = function(href){
+        log('execLocationHash: ', href);
+        if(localStorage.debug > 2 && !confirm('change locationHash: ' + href)) return;
         if(href.match('(#.+)$')){
             lasthash = RegExp.$1;
         }else{
@@ -20,9 +25,14 @@ function urlcleanup(isEvent){
     if(location.hash && (location.hash && location.hash.match(hashcucond)) &&
        !sessionStorage.hashstart){
         if(isEvent){
-            var pn = location.pathname +
-                location.search + location.hash.replace(/^#\+.+/g, '').replace(/(\+).*$/g, '$1');
-            if(pn.substr(-1) == '#') pn = pn.replace(/.$/, '');
+            var pn = null;
+            if(cleanupmode.substr(0, 9) == 'except-id'){
+                pn = location.pathname + location.search + location.hash.replace(/^#\+.+/g, '')
+                    .replace(/(\+).*$/g, cleanupmode == 'except-id-and' ? '$1' : '');
+                if(pn.substr(-1) == '#') pn = pn.replace(/.$/, '');
+            }else if(cleanupmode == 'clear-all'){
+                pn = location.pathname + location.search
+            }
             history.replaceState({id: pn}, '', pn);
         }else{
             sessionStorage.hashstart = location.hash;
@@ -44,17 +54,25 @@ function sameurl(a, b){
 }
 
 function exec(href, duration){
+    var reg = new RegExp('(^.*#.*\\+)([\\s\\S]+)$', 'i');
+    if(href.match(reg) && RegExp.$2.indexOf("\n") != -1){
+        var encoded = encodeURIComponent(RegExp.$2);
+        href = RegExp.$1 + encoded;
+    }
     var hash = href.match('(#.+)$') && RegExp.$1, o = null, stat = null, cw = null;
-    var foundopener = !(duration - 0) && parentPort &&
-        sameurl(parentPort.href, href) ? opener : null;
-    log('exec:href', href, 'and set opened[hash]', hash, foundopener);
+    var issameurl = parentPort && sameurl(parentPort.href, href);
+    var foundopener = /*!(duration - 0) && */ parentPort && issameurl ? opener : null;
+    log('exec:href', href, 'and set opened[hash]', hash, parentPort, issameurl, foundopener);
     stat = {
         hash: hash, href: href, childWindow: null,
         status: 0, port: null
     };
     if(!window.name) window.name = 'exec-source-' + Math.floor(Math.random() * 100000);
+    if(localStorage.debug > 2){
+        if(!confirm('opening ' + href)) return;
+    }
     if(foundopener){
-        log('foundopener', stat, ';', href);
+        log('exec: use foundopener', stat, ';', href);
         // send stat to parentPort and kick hashchange
         parentPort.postMessage(stat);
         parentPort.postMessage(href);
@@ -69,7 +87,8 @@ function exec(href, duration){
                 }
             }
         }
-        stat.childWindow = cw || open(href.replace(/(#.+)$/g, ''), 'exec-dest');
+        log('exec: open()', href.replace(/(#.+)$/g, ''));
+        stat.childWindow = cw || open(href.replace(/(#.+)$/g, '')); //, 'exec-dest'
         if(!window.opened) window.opened = {};
         o = window.opened;
         o[hash] = stat;
@@ -79,7 +98,7 @@ function exec(href, duration){
                 o[hash].port.onmessage = function(e2){
                     log('exec, onmessage from childWindow', e2.data);
                     if(typeof(e2.data) == 'string') {
-                        changeLocationHash(e2.data);
+                        execLocationHash(e2.data);
                     }else if(e2.data.href){
                         o[e2.data.hash] = e2.data;
                         o[e2.data.hash].childWindow = stat.childWindow;
@@ -110,8 +129,10 @@ function exec(href, duration){
                     log('execcomplete1');
                     o[hash].status = 1;
                     o[hash].closeTimer = setTimeout(function(){
+                        var waited = true;
                         o[hash].closeTimer = null;
-                        o[hash].childWindow.close();
+                        if(localStorage.debug > 2) waited = confirm('closeing after ' + duration);
+                        if(waited) o[hash].childWindow.close();
                     }, duration || 0);
                 }
                 window.removeEventListener('execcomplete', execohc);
@@ -122,7 +143,7 @@ function exec(href, duration){
 
 function hashchange(event, hash){
     log('exec:hashchange:', hash, lasthash);
-    var external = null, tx = null;
+    var external = null;
     if(lasthash && event){
         external = ((hash || location.hash) == lasthash);
         lasthash = null;
@@ -131,28 +152,31 @@ function hashchange(event, hash){
         hash = location.hash; // hash was Event
     }
     if(!sessionStorage.hashstart) setTimeout(urlcleanup.bind(window, event));
-    
-    var er = document.querySelector('exec-result:not(:empty), .exec-result:not(:empty)');
-    if(er){
-        er.classList.add('copying');
-        tx = er.innerText;
-        er.classList.remove('copying');
-    }
-    var e = new CustomEvent('exec');
-    e.data = hash;
-    e.result = tx;
-    window.dispatchEvent(e);
-    window.onexec(hash, tx, external);
+    window.onexec(hash, external);
 }
 
 var selectByQuery = function(calc){
     if(!calc || !calc.match('^[a-zA-Z_][a-zA-Z0-9\\-_]*$')) return false;
-    return document.querySelector(
+    var r = document.querySelector(
         '#' + calc + ' :where(textarea,input:not([type]),input[type=text],input[type=number]), [name=' + calc + ']'
     );
+    log('exec: selectByQuery', r);
+    return r;
 }
 
-window.onexec = function(hash, result, external){
+window.onexec = function(hash, external){
+    var er = document.querySelector('exec-result:not(:empty), .exec-result:not(:empty)');
+    var result = null;
+    if(er){
+        er.classList.add('copying');
+        result = er.innerText;
+        er.classList.remove('copying');
+    }
+    var e = new CustomEvent('exec');
+    e.data = hash;
+    e.result = result;
+    window.dispatchEvent(e);
+
     var el = null, calc = null, v = null, t = null, er = null, mt = null;
     var orighash = hash;
     hash = decodeURIComponent(hash);
@@ -222,10 +246,11 @@ window.onexec = function(hash, result, external){
         }
         return true;
     }
+    log('exec: elm matching the condition not found', v, calc)
     return false;
 }
 
-if(!window.noexechashhandler){
+if(!usefocus){
     window.addEventListener('hashchange', hashchange);
     
     if((location.hash && (location.hash.substr(0, 1) == '#')) || sessionStorage.hashstart){
@@ -245,9 +270,8 @@ if(!window.noexechashhandler){
 }
 
 var parentPort = null;
-function execonload(ev){
+function execonload(){
     log('exec: load: opener', window.opener, window);
-    
     if(window.opener){
         var ch = new MessageChannel();
         log('exec: load: set channel', ch);
@@ -261,8 +285,8 @@ function execonload(ev){
                 parentPort.href = e.data;
             }else if(typeof(e.data) == 'string'){
                 log('exec: load: changing href', e.data);
-                changeLocationHash(e.data);
-            }else if(e.data.type == 'complete'){
+                execLocationHash(e.data);
+            }else if(e.data && e.data.type == 'complete'){
                 var ev = new CustomEvent('execcomplete');
                 ev.hash = e.data.hash;
                 ev.result = e.data.result;
@@ -272,11 +296,23 @@ function execonload(ev){
         opener.postMessage('init', '*', [ch.port2]);
     }
 }
+
 if(window == top){
-    if(document.readyState == 'complete'){
-        execonload();
+    if(usefocus){
+        if(document.hasFormFocus()){
+            execonload();
+        }else{
+            document.addEventListener('formfocus', function onformfocus(){
+                document.removeEventListener('formfocus', onformfocus);
+                execonload();
+            });
+        }
     }else{
-        window.addEventListener('load', execonload);
+        if(document.readyState == 'complete'){
+            execonload();
+        }else{
+            window.addEventListener('load', execonload);
+        }
     }
 }else{
     console.warn('exec: Non top window');
